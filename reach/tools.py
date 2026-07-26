@@ -4,16 +4,34 @@ Reach — the tool layer the research agent (Claude Fable 5) drives autonomously
 Each tool reaches a different part of the internet and returns clean, LLM-ready text
 plus the source URLs it touched (so every claim in the final report can be cited).
 
-Powers combined here (each optional tool self-guards on whether its CLI is installed):
-  - open web        : web_search (DuckDuckGo, keyless) + read_url (Scrapling, stealth-capable)
-  - developer world : github_search, youtube (transcripts)
-  - login-gated     : twitter_search, reddit_search — only exposed when their CLIs are installed
-                      on this host; the deployed engine currently runs open-web + stealth-read +
-                      github + youtube.
+A tool is only shown to the model when this host can actually perform it, so the agent never spends a
+round on something that can only answer "unavailable", and a buyer is never charged for a reach we
+cannot make. Three tiers:
 
-Scrapling (BSD-3) provides the fetch engine — StealthyFetcher bypasses Cloudflare/anti-bot;
-agent-reach (MIT) provides the routed CLIs (twitter-cli, rdt-cli, yt-dlp, gh) for the
-login-gated platforms. See THIRD_PARTY_LICENSES.md.
+  keyless (always present — public HTTP, nothing to configure, cannot expire)
+      web_search      open web, engine chain DuckDuckGo -> Brave -> Bing, relevance-scored
+      read_url        any page as clean text, stealth browser fallback for JS-only pages
+      github_search   repositories by topic, stars, language        (api.github.com)
+      hn_search       Hacker News stories AND comments, ranked      (hn.algolia.com)
+      twitter_thread  one public X post in full                     (cdn.syndication.twimg.com)
+      rss_read        any RSS/Atom feed
+
+  binary-backed (present when the binary is installed)
+      youtube         title, channel, description, transcript       (yt-dlp)
+
+  session-backed (present only when an operator configured a session)
+      twitter_search  live X search   — X publishes no keyless search endpoint
+      reddit_search   Reddit threads  — Reddit answers 403 to unauthenticated datacenter reads
+
+These tiers are not cosmetic. github_search and twitter_thread used to be gated behind the `gh` and
+`twitter` CLIs, which exist on a developer laptop and not on the server — so in production the model
+was never offered them at all. They now speak to public endpoints directly. The session tier stays
+gated on purpose: a cookie cannot be renewed automatically, so a service that advertised it as a
+standing capability would be selling something that silently dies.
+
+Scrapling (BSD-3) provides the stealth fetch engine. Channel routing follows the approach taken by
+agent-reach (MIT) — see THIRD_PARTY_LICENSES.md — reimplemented here over HTTP rather than over its
+CLIs, because agent-reach extracts cookies from a local browser and a hosted service has none.
 """
 from __future__ import annotations
 import base64
@@ -460,43 +478,133 @@ def web_search(sb: SourceBook, query: str, num: int = 8) -> str:
 # ---- Twitter / X (walled garden) ----
 
 
-def twitter_search(sb: SourceBook, query: str, n: int = 15) -> str:
-    """Search live Twitter/X for a query — what real people are posting right now.
-    ChatGPT/Perplexity cannot read this; a logged-in session (agent-reach) can."""
-    if not shutil.which("twitter"):
-        return "twitter tool unavailable on this host."
-    code, out, err = _run(["twitter", "search", query, "-n", str(n)], timeout=50)
-    if code != 0 or not out.strip():
-        return f"twitter_search failed: {(err or out)[:160]}"
-    sb.add(f"https://x.com/search?q={urllib.parse.quote(query)}", title=f"X search: {query}", via="twitter")
-    return f"Twitter/X — live posts for '{query}':\n\n{_clean(out, 4500)}"
+# `status/<id>` first: a bare-number fallback with a length floor rejected real short ids (tweet 20,
+# the first tweet ever posted) while also risking a match on some unrelated number in the path.
+_TWEET_ID = re.compile(r"status(?:es)?/(\d+)|^\s*(\d{6,25})\s*$")
 
 
 def twitter_thread(sb: SourceBook, url_or_id: str) -> str:
-    """Read a specific tweet/thread in full."""
-    if not shutil.which("twitter"):
-        return "twitter tool unavailable."
-    code, out, err = _run(["twitter", "tweet", url_or_id], timeout=45)
-    if code != 0:
-        return f"twitter_thread failed: {(err or out)[:160]}"
-    sb.add(url_or_id if url_or_id.startswith("http") else f"https://x.com/i/status/{url_or_id}",
-           title="X thread", via="twitter")
-    return _clean(out, 4000)
+    """Read one public tweet in full — author, text, timestamp, engagement, quoted tweet.
+
+    Uses X's public syndication endpoint, which needs no login and no cookie. Verified against
+    tweet id 20 (@jack, "just setting up my twttr"). This is the part of X that is genuinely
+    readable without an account, so it is exposed unconditionally.
+    """
+    m = _TWEET_ID.search(url_or_id or "")
+    if not m:
+        return "twitter_thread needs a tweet URL or numeric id."
+    tid = m.group(1) or m.group(2)
+    try:
+        j = _api_json(f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&lang=en&token=a")
+    except Exception as e:  # noqa: BLE001
+        return f"twitter_thread failed: {type(e).__name__}: {str(e)[:140]}"
+    user = (j or {}).get("user") or {}
+    text = (j or {}).get("text")
+    if not text:
+        # A deleted, protected or non-existent tweet returns 200 with empty fields. Say so — do not
+        # let the model infer content that was never returned.
+        return (f"Tweet {tid} could not be read: it is deleted, private, or does not exist. "
+                f"X returned an empty record, not an error.")
+    link = f"https://x.com/{user.get('screen_name','i')}/status/{tid}"
+    n = sb.add(link, title=f"@{user.get('screen_name','?')} on X", via="twitter")
+    parts = [f"[source {n}] @{user.get('screen_name')} ({user.get('name')})"
+             f"{' · verified' if user.get('is_blue_verified') else ''}",
+             f"  {link}",
+             f"  posted: {j.get('created_at','?')}",
+             f"  likes {j.get('favorite_count',0):,} · replies {j.get('conversation_count',0):,}",
+             "", _clean(text, 2000)]
+    q = j.get("quoted_tweet") or {}
+    if q.get("text"):
+        parts += ["", f"  quoting @{(q.get('user') or {}).get('screen_name','?')}: {_clean(q['text'], 600)}"]
+    return "\n".join(parts)
+
+
+def _x_cookie() -> tuple[str, str]:
+    import os
+    return os.environ.get("X_AUTH_TOKEN", "").strip(), os.environ.get("X_CT0", "").strip()
+
+
+def twitter_search(sb: SourceBook, query: str, n: int = 15) -> str:
+    """Search live X posts. Requires an operator-supplied session, because X has no keyless search.
+
+    Kept strictly separate from twitter_thread: reading one public tweet needs nothing, searching
+    needs a logged-in session. Conflating them would let the service advertise a reach it only
+    sometimes has.
+    """
+    auth, ct0 = _x_cookie()
+    if not (auth and ct0):
+        return ("twitter_search is not available: X has no keyless search endpoint and this host has "
+                "no X session configured. Use web_search (which indexes public X posts) or "
+                "twitter_thread for a specific tweet.")
+    url = ("https://api.x.com/2/search/adaptive.json?q=" + urllib.parse.quote(query)
+           + f"&count={max(5, min(int(n or 15), 30))}&tweet_search_mode=live&query_source=typed_query")
+    hdrs = {
+        # Public web bearer — the same one x.com ships to logged-out browsers.
+        "Authorization": ("Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D"
+                          "1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"),
+        "x-csrf-token": ct0,
+        "Cookie": f"auth_token={auth}; ct0={ct0}",
+        "x-twitter-auth-type": "OAuth2Session",
+        "x-twitter-active-user": "yes",
+    }
+    try:
+        j = _api_json(url, hdrs, timeout=30)
+    except Exception as e:  # noqa: BLE001
+        return (f"twitter_search could not reach X ({type(e).__name__}). The configured session may "
+                f"have expired — sessions are not renewable automatically. Falling back is safer: "
+                f"use web_search for public X content.")
+    tweets = ((j or {}).get("globalObjects") or {}).get("tweets") or {}
+    users = ((j or {}).get("globalObjects") or {}).get("users") or {}
+    if not tweets:
+        return f"X returned no live posts for '{query}'."
+    rows = sorted(tweets.values(), key=lambda t: t.get("favorite_count", 0), reverse=True)[:12]
+    out = []
+    for t in rows:
+        u = users.get(str(t.get("user_id_str") or ""), {})
+        handle = u.get("screen_name", "?")
+        link = f"https://x.com/{handle}/status/{t.get('id_str')}"
+        k = sb.add(link, title=f"@{handle} on X", via="twitter")
+        out.append(f"[source {k}] @{handle} · likes {t.get('favorite_count',0):,}\n  {link}\n"
+                   f"  {_clean(t.get('full_text') or t.get('text') or '', 400)}")
+    return f"X — live posts for '{query}':\n\n" + "\n\n".join(out)
 
 
 # ---- Reddit (walled garden) ----
 
 
 def reddit_search(sb: SourceBook, query: str) -> str:
-    """Search Reddit — honest community opinion. Best-effort (session may need refresh)."""
-    if not shutil.which("rdt"):
-        return "reddit tool unavailable on this host."
-    code, out, err = _run(["rdt", "search", query], timeout=50)
-    if code != 0 or not out.strip():
-        return f"reddit_search unavailable right now ({(err or 'no output')[:100]}). Rely on other sources."
-    sb.add(f"https://www.reddit.com/search/?q={urllib.parse.quote(query)}",
-           title=f"Reddit search: {query}", via="reddit")
-    return f"Reddit — discussions for '{query}':\n\n{_clean(out, 4500)}"
+    """Search Reddit for community discussion.
+
+    Reddit's public JSON now answers 403 to datacenter IPs even with a browser user-agent (checked
+    against both www and old.reddit), so this needs an operator-supplied session. Without one it says
+    so rather than returning nothing and letting the model assume the topic is undiscussed.
+    """
+    import os
+    cookie = os.environ.get("REDDIT_COOKIE", "").strip()
+    if not cookie:
+        return ("reddit_search is not available: Reddit blocks unauthenticated reads from this host "
+                "(403) and no Reddit session is configured. Use hn_search for practitioner discussion, "
+                "or web_search, which indexes public Reddit threads.")
+    u = ("https://www.reddit.com/search.json?limit=8&sort=relevance&t=year&q="
+         + urllib.parse.quote(query))
+    try:
+        j = _api_json(u, {"Cookie": cookie}, timeout=30)
+    except Exception as e:  # noqa: BLE001
+        return (f"reddit_search could not reach Reddit ({type(e).__name__}). The configured session may "
+                f"have expired; sessions are not renewable automatically. Use hn_search or web_search.")
+    kids = ((j or {}).get("data") or {}).get("children") or []
+    if not kids:
+        return f"Reddit returned no threads for '{query}'."
+    out = []
+    for c in kids:
+        d = c.get("data") or {}
+        link = "https://www.reddit.com" + (d.get("permalink") or "")
+        n = sb.add(link, title=(d.get("title") or "")[:140], via="reddit")
+        body = _clean(d.get("selftext") or "", 350)
+        out.append(f"[source {n}] r/{d.get('subreddit','?')} — {(d.get('title') or '')[:140]}\n"
+                   f"  {d.get('score',0):,} points · {d.get('num_comments',0):,} comments\n  {link}"
+                   + (f"\n  {body}" if body else ""))
+    return f"Reddit — discussions for '{query}':\n\n" + "\n\n".join(out)
 
 
 # ---- YouTube (transcripts of the walled garden) ----
@@ -544,27 +652,108 @@ def youtube(sb: SourceBook, url: str) -> str:
 # ---- GitHub (developer world) ----
 
 
+def _api_json(url: str, headers: dict | None = None, timeout: int = 25) -> Any:
+    """GET a JSON API directly. No CLI, so the capability exists wherever this runs.
+
+    The CLI-backed versions of these tools answered "tool unavailable on this host" in production,
+    because `gh`, `twitter` and `rdt` are only installed on a developer laptop. A hosted paid service
+    cannot depend on someone's workstation, so the channels that have a keyless HTTP endpoint now use
+    it directly.
+    """
+    h = {"User-Agent": _UA, "Accept": "application/json"}
+    if headers:
+        h.update(headers)
+    r = requests.get(url, headers=h, timeout=timeout)
+    r.raise_for_status()
+    return r.json()
+
+
 def github_search(sb: SourceBook, query: str) -> str:
-    """Search GitHub repos/code for a query. gh CLI under the hood."""
-    if not shutil.which("gh"):
-        return "github tool unavailable."
-    code, out, err = _run(
-        ["gh", "search", "repos", query, "--limit", "8",
-         "--json", "fullName,description,stargazersCount,url,updatedAt"],
-        timeout=45,
-    )
-    if code != 0 or not out.strip():
-        return f"github_search failed: {(err or out)[:160]}"
+    """Search GitHub repositories. Keyless REST API; GITHUB_TOKEN only raises the rate limit."""
+    import os
+    hdr = {}
+    tok = os.environ.get("GITHUB_TOKEN", "").strip()
+    if tok:
+        hdr["Authorization"] = f"Bearer {tok}"
+    u = ("https://api.github.com/search/repositories?per_page=8&sort=stars&order=desc&q="
+         + urllib.parse.quote(query))
     try:
-        rows = json.loads(out)
-    except Exception:  # noqa: BLE001
-        return _clean(out, 3000)
+        j = _api_json(u, hdr)
+    except Exception as e:  # noqa: BLE001
+        return f"github_search failed: {type(e).__name__}: {str(e)[:140]}"
+    items = j.get("items") or []
+    if not items:
+        return f"GitHub returned no repositories for '{query}'."
     lines = []
-    for r in rows:
-        n = sb.add(r.get("url", ""), title=r.get("fullName", ""), via="github")
-        lines.append(f"[source {n}] {r.get('fullName','')} ★{r.get('stargazersCount',0)}\n"
-                     f"  {r.get('url','')}\n  {(r.get('description') or '')[:160]}")
-    return "GitHub repos for '" + query + "':\n\n" + "\n\n".join(lines)
+    for r in items:
+        n = sb.add(r.get("html_url", ""), title=r.get("full_name", ""), via="github")
+        lines.append(f"[source {n}] {r.get('full_name','')} ★{r.get('stargazers_count',0):,}"
+                     f"  ({r.get('language') or 'n/a'})\n  {r.get('html_url','')}\n"
+                     f"  {(r.get('description') or '')[:180]}")
+    return (f"GitHub — {j.get('total_count',0):,} repositories match '{query}'. Top {len(items)} by stars:"
+            f"\n\n" + "\n\n".join(lines))
+
+
+def hn_search(sb: SourceBook, query: str) -> str:
+    """Search Hacker News stories and comments — what engineers actually said about something.
+
+    Keyless (Algolia). This is the honest substitute for the login-gated forums: real practitioner
+    opinion, fully public, and it cannot silently expire the way a session cookie does.
+    """
+    u = ("https://hn.algolia.com/api/v1/search?hitsPerPage=8&tags=(story,comment)&query="
+         + urllib.parse.quote(query))
+    try:
+        j = _api_json(u)
+    except Exception as e:  # noqa: BLE001
+        return f"hn_search failed: {type(e).__name__}: {str(e)[:140]}"
+    hits = j.get("hits") or []
+    if not hits:
+        return f"Hacker News has no discussion matching '{query}'."
+    hits = sorted(hits, key=lambda h: ((h.get("points") or 0), (h.get("num_comments") or 0)), reverse=True)
+    lines = []
+    for h in hits:
+        oid = h.get("objectID")
+        link = f"https://news.ycombinator.com/item?id={oid}"
+        title = h.get("title") or h.get("story_title") or "(comment)"
+        n = sb.add(link, title=title[:120], via="hackernews")
+        body = re.sub(r"<[^>]+>", " ", h.get("comment_text") or h.get("story_text") or "")
+        meta = f"{h.get('points') or 0} points, {h.get('num_comments') or 0} comments"
+        lines.append(f"[source {n}] {title[:120]}  ({meta})\n  {link}"
+                     + (f"\n  {_clean(body, 400)}" if body.strip() else ""))
+    return (f"Hacker News — {j.get('nbHits',0):,} results for '{query}'. Top {len(hits)}:\n\n"
+            + "\n\n".join(lines))
+
+
+def rss_read(sb: SourceBook, url: str) -> str:
+    """Read an RSS or Atom feed and return its recent entries as text. Keyless."""
+    _guard_url(url)
+    try:
+        r = requests.get(url, timeout=25, headers={
+            "User-Agent": _UA, "Accept-Encoding": "gzip, deflate",
+            "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"})
+        r.raise_for_status()
+        xml = r.text
+    except Exception as e:  # noqa: BLE001
+        return f"rss_read failed: {type(e).__name__}: {str(e)[:140]}"
+    items = re.findall(r"<(?:item|entry)\b.*?</(?:item|entry)>", xml, re.S | re.I)[:12]
+    if not items:
+        return f"No feed entries found at {url} (is it really RSS/Atom?)."
+    feed_n = sb.add(url, title="feed", via="rss")
+    out = [f"[source {feed_n}] feed: {url}", ""]
+    for it in items:
+        t = re.search(r"<title[^>]*>(.*?)</title>", it, re.S | re.I)
+        l = re.search(r"<link[^>]*>(.*?)</link>", it, re.S | re.I) or re.search(r'<link[^>]*href="([^"]+)"', it, re.I)
+        d = re.search(r"<(?:pubDate|updated|published)[^>]*>(.*?)</", it, re.S | re.I)
+        def _t(m):
+            s = re.sub(r"<!\[CDATA\[(.*?)\]\]>", r"\1", m.group(1), flags=re.S) if m else ""
+            return re.sub(r"<[^>]+>", " ", s).strip()
+        title, link, when = _t(t), _t(l), _t(d)
+        if link:
+            n = sb.add(link, title=title[:120], via="rss")
+            out.append(f"[source {n}] {title[:140]}{('  ' + when) if when else ''}\n  {link}")
+        else:
+            out.append(f"- {title[:140]}{('  ' + when) if when else ''}")
+    return "\n".join(out)
 
 
 # ---- the tool registry Fable sees (Anthropic tool schema) ----
@@ -594,26 +783,60 @@ def build_toolset(sb: SourceBook) -> tuple[list[dict], dict[str, Callable[..., s
         "web_search": lambda query, num=8: web_search(sb, query, int(num or 8)),
         "read_url": lambda url: read_url(sb, url),
     }
-    # Optional walled-garden / developer channels — only exposed to the model when the backing CLI is
-    # actually installed, so it never wastes a round on a tool that would just answer "unavailable"
-    # (and Reach never advertises a reach it can't currently make).
-    optional = [
-        ("twitter", "twitter_search", lambda query: twitter_search(sb, query),
-         "Search LIVE Twitter/X for what real people are posting right now — sentiment, breaking takes, primary voices inside the walled garden.",
+    # Keyless channels. These talk to public HTTP APIs, so they work wherever the service runs and
+    # cannot expire. Previously they were gated behind a CLI (`gh`, `twitter`) that only exists on a
+    # developer laptop, which meant production silently never had them.
+    keyless = [
+        ("github_search", lambda query: github_search(sb, query),
+         "Search GitHub repositories by topic — stars, language, description, URL. Use for software, "
+         "tooling and the open-source landscape around a subject.",
          {"query": {"type": "string"}}, ["query"]),
-        ("rdt", "reddit_search", lambda query: reddit_search(sb, query),
-         "Search Reddit for honest community discussion and lived experience on a topic — 'what do real users actually think'.",
+        ("hn_search", lambda query: hn_search(sb, query),
+         "Search Hacker News stories AND comments — what engineers and founders actually said about "
+         "something, with points and comment counts. Best source for candid practitioner opinion.",
          {"query": {"type": "string"}}, ["query"]),
-        ("yt-dlp", "youtube", lambda url: youtube(sb, url),
-         "Given a YouTube URL, get the video's title, channel, description and transcript as text.",
-         {"url": {"type": "string", "description": "a youtube.com or youtu.be URL"}}, ["url"]),
-        ("gh", "github_search", lambda query: github_search(sb, query),
-         "Search GitHub for repositories/projects matching a query (stars, description, URL). Use for software, tools, open-source landscape.",
-         {"query": {"type": "string"}}, ["query"]),
+        ("twitter_thread", lambda url_or_id: twitter_thread(sb, url_or_id),
+         "Read one public tweet/X post in full from its URL or id — author, text, timestamp, likes, "
+         "and any quoted post. Use when a source or claim points at a specific tweet.",
+         {"url_or_id": {"type": "string", "description": "an x.com/twitter.com status URL or numeric id"}},
+         ["url_or_id"]),
+        ("rss_read", lambda url: rss_read(sb, url),
+         "Read an RSS or Atom feed and list its recent entries with links. Use for blogs, changelogs "
+         "and newsrooms that publish a feed.",
+         {"url": {"type": "string", "description": "the feed URL"}}, ["url"]),
     ]
-    for cli, name, fn, desc, props, required in optional:
-        if shutil.which(cli):
-            schemas.append({"name": name, "description": desc,
-                            "input_schema": {"type": "object", "properties": props, "required": required}})
-            dispatch[name] = fn
+    for name, fn, desc, props, required in keyless:
+        schemas.append({"name": name, "description": desc,
+                        "input_schema": {"type": "object", "properties": props, "required": required}})
+        dispatch[name] = fn
+
+    # CLI-backed: still self-guarding, because a missing binary is a real absence.
+    if shutil.which("yt-dlp"):
+        schemas.append({"name": "youtube", "description":
+                        "Given a YouTube URL, get the video's title, channel, description and full "
+                        "transcript as text, so its content can be researched and quoted.",
+                        "input_schema": {"type": "object", "properties": {
+                            "url": {"type": "string", "description": "a youtube.com or youtu.be URL"}},
+                            "required": ["url"]}})
+        dispatch["youtube"] = lambda url: youtube(sb, url)
+
+    # Session-backed: only offered when an operator has actually configured a session, so the model is
+    # never handed a tool that can only answer "not configured", and a buyer is never charged for a
+    # reach this host cannot currently make.
+    import os
+    if os.environ.get("X_AUTH_TOKEN") and os.environ.get("X_CT0"):
+        schemas.append({"name": "twitter_search", "description":
+                        "Search LIVE X/Twitter posts for a query — current sentiment, breaking takes "
+                        "and primary voices. X has no keyless search, so this exists only on hosts "
+                        "with a configured session.",
+                        "input_schema": {"type": "object", "properties": {
+                            "query": {"type": "string"}}, "required": ["query"]}})
+        dispatch["twitter_search"] = lambda query: twitter_search(sb, query)
+    if os.environ.get("REDDIT_COOKIE"):
+        schemas.append({"name": "reddit_search", "description":
+                        "Search Reddit threads for community discussion and lived experience — what "
+                        "real users say about a topic, with score and comment counts.",
+                        "input_schema": {"type": "object", "properties": {
+                            "query": {"type": "string"}}, "required": ["query"]}})
+        dispatch["reddit_search"] = lambda query: reddit_search(sb, query)
     return schemas, dispatch
