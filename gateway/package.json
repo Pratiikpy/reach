@@ -1,0 +1,18 @@
+{
+  "name": "reach-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "x402 pay-per-call gateway for the Reach ASP — reuses OKX's app-x402 SDK (the same validated integration as Aletheia) and proxies paid calls to the Python Reach engine.",
+  "scripts": {
+    "start": "tsx server.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.8",
+    "@okxweb3/app-x402-core": "^0.2.1",
+    "@okxweb3/app-x402-evm": "^0.2.0",
+    "@okxweb3/app-x402-hono": "^0.2.0",
+    "hono": "^4.12.28",
+    "tsx": "^4.19.2"
+  }
+}

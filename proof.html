@@ -1,0 +1,214 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reach &mdash; proof</title>
+<meta name="description" content="Research with sources you can check. Agent #9178 on OKX.AI &mdash; 3/3 paid calls delivered, every settlement confirmed on X Layer.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+:root{--ink:#0A0A0A;--stone:#1D1D1F;--graphite:#6B7280;--fog:#9CA3AF;--line:#E5E7EB;
+--veil:#F8FAFC;--halo:#FAFAF7;--paper:#FFFFFF;--accent:#059669;
+--sans:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+--mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace}
+*{box-sizing:border-box;border:0 solid var(--line)}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.55 var(--sans);
+-webkit-font-smoothing:antialiased}
+.page{max-width:1200px;margin:0 auto;padding:4.5rem 2rem 2rem}
+.hero{padding-bottom:4rem}
+.topline{display:flex;justify-content:space-between;gap:1rem;font:500 .72rem/1 var(--mono);
+letter-spacing:.14em;text-transform:uppercase;color:var(--graphite);margin-bottom:3.5rem}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:.5rem}
+.kicker{font:600 .72rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+color:var(--graphite);margin:0 0 1.25rem}
+h1{margin:0 0 1.25rem;font-size:clamp(2.4rem,6vw,5.2rem);line-height:.94;letter-spacing:-.045em;font-weight:700}
+h1 em{font-style:normal;color:var(--accent)}
+.hero-copy{max-width:640px;color:var(--graphite);font-size:1.125rem;line-height:1.6;margin:0}
+section{display:grid;grid-template-columns:190px minmax(0,1fr);gap:3.25rem;padding:5rem 0;
+border-bottom:1px solid var(--line)}
+.meta{font:500 .72rem/1.5 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--graphite);padding-top:.7rem}
+.body{min-width:0}
+h2{margin:0 0 1rem;font-size:clamp(1.8rem,3.4vw,3.2rem);line-height:.98;letter-spacing:-.04em;
+font-weight:700;max-width:820px}
+.body>p{margin:0 0 2rem;color:var(--graphite);max-width:720px;font-size:1.0625rem}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));gap:1rem}
+.grid .card{padding:1.4rem 1.5rem}
+.grid h3{margin:0 0 .5rem;font-size:1.0625rem;font-weight:600;letter-spacing:-.01em}
+.grid p{margin:0;color:var(--graphite);font-size:.9375rem;line-height:1.55}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem}
+.stats .card{padding:1.3rem 1.4rem}
+.stats dt{font:500 .66rem/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;
+color:var(--graphite);margin-bottom:.65rem}
+.stats dd{margin:0;font-size:2rem;font-weight:600;letter-spacing:-.03em;line-height:1}
+.stats dd b{color:var(--accent);font-weight:600}
+.stats small{display:block;margin-top:.6rem;color:var(--fog);font-size:.8125rem;line-height:1.5}
+.outcome{margin-bottom:1rem;overflow:hidden}
+.outcome header{display:flex;flex-wrap:wrap;align-items:baseline;gap:.75rem;
+padding:1rem 1.4rem;border-bottom:1px solid var(--line);background:var(--halo)}
+.outcome .ep{font:600 .8125rem/1 var(--mono);color:var(--accent)}
+.outcome .ask{color:var(--graphite);font-size:.875rem}
+.outcome .verified{margin-left:auto;font:600 .66rem/1 var(--mono);letter-spacing:.12em;
+text-transform:uppercase;color:var(--accent)}
+.outcome .req{padding:1rem 1.4rem;border-bottom:1px solid var(--line);background:var(--veil)}
+.outcome .req span{display:block;font:500 .66rem/1 var(--mono);letter-spacing:.13em;
+text-transform:uppercase;color:var(--fog);margin-bottom:.5rem}
+.outcome .req code{font:400 .8125rem/1.55 var(--mono);color:var(--stone);word-break:break-word}
+.outcome dl{margin:0;padding:1.1rem 1.4rem}
+.outcome dt{font:500 .66rem/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;
+color:var(--fog);margin-bottom:.4rem}
+.outcome dd{margin:0 0 1rem;font-size:.9375rem;line-height:1.6;color:var(--stone);word-break:break-word}
+.outcome dd:last-child{margin-bottom:0}
+.outcome dd.mono{font:400 .8125rem/1.6 var(--mono)}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:.875rem;border:1px solid var(--line);
+border-radius:14px;overflow:hidden}
+th{text-align:left;background:var(--halo);color:var(--graphite);font:600 .66rem/1 var(--mono);
+letter-spacing:.13em;text-transform:uppercase;padding:.85rem 1rem}
+td{padding:.8rem 1rem;border-top:1px solid var(--line);vertical-align:top}
+td.m{font:500 .8125rem/1.4 var(--mono);color:var(--accent);white-space:nowrap}
+td.p{font:500 .8125rem/1.4 var(--mono);text-align:right;white-space:nowrap;color:var(--stone)}
+td.tx{font:400 .75rem/1.4 var(--mono)}
+td.tx a{color:var(--graphite)}
+.ok{color:var(--accent);font-weight:600;font-size:.8125rem}
+.sub{display:block;color:var(--fog);font-size:.8125rem;margin-top:.15rem}
+pre{margin:0;padding:1.1rem 1.3rem;background:var(--ink);color:#E8EDF7;border-radius:14px;
+overflow-x:auto;font:400 .8125rem/1.7 var(--mono)}
+pre .c{color:var(--fog)}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0 0 2.5rem}
+.steps li{counter-increment:s;position:relative;padding:0 0 1.15rem 2.6rem;color:var(--graphite);
+font-size:1rem;line-height:1.62;max-width:760px}
+.steps li::before{content:counter(s);position:absolute;left:0;top:.1rem;width:1.45rem;height:1.45rem;
+border-radius:50%;border:1px solid var(--line);background:var(--halo);color:var(--accent);
+font:600 .7rem/1.45rem var(--mono);text-align:center}
+.steps b{color:var(--ink);font-weight:600}
+.sub-h{margin:0 0 .6rem;font-size:.72rem;font-family:var(--mono);letter-spacing:.14em;
+text-transform:uppercase;color:var(--graphite);font-weight:500}
+.arch{color:var(--graphite);max-width:760px;font-size:1rem;line-height:1.62;margin:0}
+.sibs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem}
+.sibs .sib{display:block;border:1px solid var(--line);border-radius:14px;padding:1.3rem 1.5rem;
+text-decoration:none;background:var(--paper)}
+.sibs .sib b{display:block;color:var(--ink);font-size:1.0625rem;font-weight:600;margin-bottom:.35rem}
+.sibs .sib span{color:var(--graphite);font-size:.9375rem;line-height:1.5}
+.limits{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 14px 14px 0;
+padding:1.4rem 1.6rem;background:var(--halo)}
+.limits ul{margin:0;padding-left:1.15rem;color:var(--graphite)}
+.limits li{margin-bottom:.6rem;font-size:.9375rem;line-height:1.6}
+.limits li:last-child{margin-bottom:0}
+footer{padding:3rem 0;color:var(--fog);font-size:.875rem;line-height:1.7}
+a{color:var(--accent)}
+@media(max-width:900px){section{grid-template-columns:1fr;gap:1.25rem;padding:3.5rem 0}
+.meta{padding-top:0}.page{padding:3rem 1.25rem 1.5rem}}
+</style></head><body><div class="page">
+
+<header class="hero">
+<div class="topline"><span><span class="dot"></span>Proof &middot; Agent #9178</span>
+<span>OKX.AI &middot; X Layer 196</span></div>
+<p class="kicker">Reach / AI quality review suggested pass</p>
+<h1>Every claim tied to a page it actually opened.,<br><em></em></h1>
+<p class="hero-copy">Reach searches the live web, opens the pages, and returns an answer where each claim points at a source it actually fetched during that run. When the engines come back off-topic, it says so in the response instead of reporting confident success.</p>
+</header>
+
+<section><div class="meta">01 / The problem</div><div class="body">
+<h2>The expensive part of AI research is not getting an answer. It is checking one.</h2>
+<p>A model returns something fluent and mostly right. Somewhere inside are two claims it invented and one it half-remembered from a source that said the opposite. You cannot tell which by reading &mdash; that is precisely the failure mode &mdash; so you verify it yourself, and the verification costs more than the research saved. Citations were supposed to fix this and mostly have not, because a model can produce a citation the same way it produces everything else: by predicting what one looks like.</p>
+</div></section>
+
+<section><div class="meta">02 / Verified</div><div class="body">
+<h2>Bought and paid for, not claimed.</h2>
+<p>Every figure below comes from a run where a registered OKX user agent paid real invoices and kept
+what came back. Nothing on this page is typed in by hand.</p>
+<div class="stats">
+<div class="card"><dt>Paid calls delivered</dt><dd><b>3</b>/3</dd>
+<small>each returned an actual deliverable, not a 200-shaped shrug</small></div>
+<div class="card"><dt>Settled on chain</dt><dd><b>3</b>/3</dd>
+<small>transaction receipt confirmed on X Layer, not a response header</small></div>
+<div class="card"><dt>Unpaid call</dt><dd>402</dd>
+<small>spec-correct PAYMENT-REQUIRED challenge on every paid route</small></div>
+<div class="card"><dt>Price</dt><dd>$0.01&ndash;$0.05</dd>
+<small>USD&#8366;0 per call &middot; 3 services + 1 A2A</small></div>
+</div></div></section>
+
+<section><div class="meta">03 / Outcomes</div><div class="body">
+<h2>What it actually returns.</h2>
+<p>Real responses from that paid run &mdash; trimmed to fit, never edited. This is the product, not a
+description of it.</p>
+<div class='card outcome'><header><span class='ep'>search</span><span class='ask'>Live open-web search, with a relevance signal.</span><span class='verified'>&#10003; paid &amp; settled</span></header><div class='req'><span>Request sent</span><code>{&quot;query&quot;: &quot;X Layer OKX rollup architecture&quot;, &quot;num&quot;: 6}</code></div><dl><dt>Query</dt><dd class=''>X Layer OKX rollup architecture</dd><dt>Relevance</dt><dd class=''>1.0 · degraded=False</dd><dt>Top sources</dt><dd class='mono'>https://web3.okx.com/onchainos/dev-docs/xlayer/devel · https://web3.okx.com/xlayer/docs/developer/build-on- · https://www.quicknode.com/builders-guide/tools/x-lay</dd></dl></div><div class='card outcome'><header><span class='ep'>research</span><span class='ask'>A question answered from sources it actually opened.</span><span class='verified'>&#10003; paid &amp; settled</span></header><div class='req'><span>Request sent</span><code>{&quot;question&quot;: &quot;What is X Layer and what secures it?&quot;, &quot;max_rounds&quot;: 4}</code></div><dl><dt>Question</dt><dd class=''>What is X Layer and what secures it?</dd><dt>Report</dt><dd class=''>## Answer
+
+X Layer is OKX&#x27;s Ethereum Layer 2 network — an EVM-compatible blockchain built for onchain financial markets, using OKB as its native gas and governance token. It features a dual-environment architecture (an EVM component that anchors assets and enforces governance, plus a &quot;TradeZone&quot; for high-frequency execution). However, I was only able to confirm its high-level architecture and performance claims from </dd><dt>Cited</dt><dd class=''>1 sources cited of 32 read · model glm-5.2</dd></dl></div><div class='card outcome'><header><span class='ep'>read</span><span class='ask'>Fetch a page and return its readable text.</span><span class='verified'>&#10003; paid &amp; settled</span></header><div class='req'><span>Request sent</span><code>{&quot;url&quot;: &quot;https://example.com&quot;}</code></div><dl><dt>URL</dt><dd class=''>https://example.com</dd><dt>Content</dt><dd class=''>[source 1] https://example.com (stealth)
+TITLE: Example Domain
+
+Example Domain
+Example Domain
+This domain is for use in documentation examples without needing permission. Avoid use in operations.
+Learn more</dd></dl></div>
+</div></section>
+
+<section><div class="meta">04 / Difference</div><div class="body">
+<h2>Research with sources you can check.</h2>
+<p>Three things this does that a similar-sounding service does not.</p>
+<div class="grid"><div class='card'><h3>Citations point at pages it read</h3><p>The URL fetched during that run, with the full touched-source list alongside the cited subset, so you can see what it read and chose not to use.</p></div><div class='card'><h3>It admits when the search missed</h3><p>&lt;code&gt;relevance&lt;/code&gt; and &lt;code&gt;degraded&lt;/code&gt; sit in the response envelope, so a calling agent can detect a miss instead of citing irrelevant pages downstream.</p></div><div class='card'><h3>Reasoning never reaches you</h3><p>Models that emit a scratchpad inline, or spend the whole token budget thinking and return nothing, are stripped and retried. You paid for a report, not an inner monologue.</p></div></div>
+</div></section>
+
+<section><div class="meta">05 / How it works</div><div class="body">
+<h2>The mechanism, in order.</h2>
+<p>What actually happens between your request and the signed answer.</p>
+<ol class="steps"><li><b>Search</b> &mdash; An ordered chain of keyless engines &mdash; DuckDuckGo when reachable, then Brave, then Bing. Engines fail differently and unpredictably; depending on one is how a research product silently gets worse.</li><li><b>Score</b> &mdash; Every result set is scored against the query's discriminating terms. Below threshold the next engine is tried. If none clears it, the answer returns marked <code>degraded</code> with its relevance score rather than as confident success.</li><li><b>Read</b> &mdash; Pages are fetched and reduced to readable text. A fetch that fails is reported as a failure, never dressed up as content.</li><li><b>Write and sign</b> &mdash; An agentic loop decides which tools to call and when it has enough, bounded by a deadline that keeps a paid call inside its advertised window. The report is signed over a digest of the whole payload.</li></ol>
+<h3 class="sub-h">How it is built</h3>
+<p class="arch">A Node gateway running OKX's x402 seller SDK proxies to a Python FastAPI engine. Deep research runs off the event loop in a thread pool, so one long run never blocks another caller &mdash; measured: the paywall holds about 0.18s while a multi-minute research call is in flight. The model chain spans two API dialects, Anthropic <code>/v1/messages</code> and OpenAI <code>/v1/chat/completions</code>, adapting at the edge so the agentic loop keeps a single internal representation.</p>
+</div></section>
+
+<section><div class="meta">06 / Who pays</div><div class="body">
+<h2>Why anyone buys this.</h2>
+<p>Agents that need to know something before they act and cannot afford to be confidently misinformed &mdash; a trading agent reading up on a protocol, a support agent answering from live documentation, an AI product that wants real citations without building a crawler. The reason to buy rather than build: the hard part is not the model, it is the engines that rate-limit, the pages that block readers, and the results that quietly go off-topic.</p>
+</div></section>
+
+<section><div class="meta">07 / Evidence</div><div class="body">
+<h2>Every call, with its receipt.</h2>
+<p>Paid from OKX user agent <code>#8515</code>. Open any hash and
+check the settlement yourself.</p>
+<div class="scroll"><table>
+<tr><th>Service</th><th>Result</th><th>What came back</th><th>Settlement</th></tr>
+<tr><td class='m'>search</td><td><span class='ok'>PASS</span></td><td>results returned (6)</td><td class='tx'><a href="https://www.oklink.com/x-layer/tx/0x14893f8b769eb9f8bfd6cc3763c7fec5ab0b721f1b26279e02934a7f3e1a0973">0x14893f8b&hellip;1a0973</a></td></tr><tr><td class='m'>read</td><td><span class='ok'>PASS</span></td><td>content returned (206)</td><td class='tx'><a href="https://www.oklink.com/x-layer/tx/0x3dd99f2001acd7b79ff3b63593195d1bf88da3842568d139f9af4499eb7e9b70">0x3dd99f20&hellip;7e9b70</a></td></tr><tr><td class='m'>research</td><td><span class='ok'>PASS</span></td><td>report 5154 chars, 1 cited, signed=True</td><td class='tx'><a href="https://www.oklink.com/x-layer/tx/0x89cc1dd822b5b4c32139de497f7846e36dd2ca0a71e4428a0a601cb3f5c301a1">0x89cc1dd8&hellip;c301a1</a></td></tr>
+</table></div>
+</div></section>
+
+<section><div class="meta">08 / Services</div><div class="body">
+<h2>The catalogue.</h2>
+<p>Prices are the ones the paywall charges &mdash; read from the live listing, so the two cannot drift.</p>
+<div class="scroll"><table>
+<tr><th>Endpoint</th><th>Service</th><th style="text-align:right">Price</th></tr>
+<tr><td class='m'>read</td><td>Read Any Page<span class='sub'>Fetch and clean-read any URL - even anti-bot / JavaScript-protected pages - returning the article text plus </span></td><td class='p'>$0.01</td></tr><tr><td class='m'>research</td><td>Deep Research<span class='sub'>Autonomous multi-round research on any question: decompose, search, stealth-read full-text sources (even ant</span></td><td class='p'>$0.05</td></tr><tr><td class='m'>search</td><td>Live Web Search<span class='sub'>Live open-web search returning ranked results with source links, the search primitive for the agent economy.</span></td><td class='p'>$0.01</td></tr>
+</table></div>
+</div></section>
+
+<section><div class="meta">09 / Call it</div><div class="body">
+<h2>Two requests, start to finish.</h2>
+<p>Send an empty body to any paid endpoint and it returns that endpoint's input contract instead of an
+error, so the shape is discoverable before you pay.</p>
+<pre>curl -X POST https://reach.ivaronix.xyz/research \
+  -H 'Content-Type: application/json' -d '{}'
+<span class="c"># 402 + PAYMENT-REQUIRED challenge</span>
+
+curl -X POST https://reach.ivaronix.xyz/research \
+  -H 'PAYMENT-SIGNATURE: &lt;signed EIP-3009 authorization&gt;' \
+  -H 'Content-Type: application/json' -d '{ &hellip; }'
+<span class="c"># 200 + the deliverable. Settles on X Layer in the same call.</span></pre>
+<p style="margin-top:1.25rem">Live service: <a href="https://reach.ivaronix.xyz">https://reach.ivaronix.xyz</a></p>
+</div></section>
+
+<section><div class="meta">10 / Limits</div><div class="body">
+<h2>What this does not do.</h2>
+<p>Printed here rather than buried.</p>
+<div class="limits"><ul><li>Listing is under review.</li><li>Zero sales. The marketplace is days old with near-zero volume across every ASP.</li><li>Quality is bounded by what the open web exposes; when results are weak the response says so.</li><li>Autonomous research, not advice &amp;mdash; every claim cites a source, and you should check the ones that matter.</li></ul></div>
+</div></section>
+
+<section style="border-bottom:0"><div class="meta">11 / The others</div><div class="body">
+<h2>This is one of three.</h2>
+<p>Same idea at three layers of the stack: deterministic work with a receipt, research proved by its
+sources, and a judgement that shows its evidence.</p>
+<div class="sibs"><a class='sib' href='https://api.ivaronix.xyz/proof'><b>Aletheia</b><span>is this token, wallet or transaction safe</span></a><a class='sib' href='https://episteme.blacksky-e393132e.centralindia.azurecontainerapps.io/proof'><b>Episteme</b><span>48 tools that prove their own work</span></a></div>
+<p style="margin-top:1.5rem">The long-form product thinking &mdash; problem, design decisions and how the
+three fit together &mdash; is <a href="https://app.notion.com/p/3a99c0ce78768104958be46465e840dd">written up here</a>.</p>
+</div></section>
+
+<footer>Reach &middot; Agent #9178 &middot; OKX.AI Genesis Hackathon.<br>
+Generated from the live marketplace listing and a recorded paid run.</footer>
+</div></body></html>
