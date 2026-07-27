@@ -293,7 +293,7 @@ async def read(req: Request):
         "detail": None if retrieved else text,
         "chars": len(text) if retrieved else 0,
         "sources": sb.as_list(),
-        "ignored_input": _ignored_note("/read", body),
+        **({"ignored_input": _n} if (_n := _ignored_note("/read", body)) else {}),
     }, status_code=200)
 
 
@@ -341,7 +341,7 @@ async def search(req: Request):
                     f"not be about this subject; treat as unverified" if degraded else None)),
         "detail": None if ok else text,
         "sources": found,
-        "ignored_input": _ignored_note("/search", body),
+        **({"ignored_input": _n} if (_n := _ignored_note("/search", body)) else {}),
     }, status_code=200)
 
 

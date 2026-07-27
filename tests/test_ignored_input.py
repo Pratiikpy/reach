@@ -56,3 +56,15 @@ def test_a_non_dict_body_does_not_raise():
 def test_every_guarded_route_declares_something(path):
     """An empty accepted-set would silently disable the check for that route."""
     assert _ACCEPTED_FIELDS[path], f"{path} declares no accepted fields"
+
+
+def test_the_field_is_absent_when_there_is_nothing_to_report():
+    """A null on every correct call is noise the caller has to filter, and it makes "no notice" look
+    like "an empty notice". Found by a regression sweep flagging the null this fix had introduced."""
+    from fastapi.testclient import TestClient
+
+    import server as srv
+    c = TestClient(srv.app)
+    # A route that needs no network: an empty body returns the usage contract, not a result.
+    r = c.post("/search", json={})
+    assert "ignored_input" not in r.json()
