@@ -93,6 +93,45 @@ def well_known_signer():
     }
 
 
+# What each route actually reads. Anything else in the body was not understood, and saying so is the
+# difference between "you got what you asked for" and "you got the default and were not told".
+_ACCEPTED_FIELDS: dict[str, set[str]] = {
+    "/research": {"question", "query", "max_rounds"},
+    "/research/stream": {"question", "query", "max_rounds"},
+    "/read": {"url", "max_chars"},
+    "/search": {"query", "num"},
+}
+
+
+def _ignored_note(path: str, body: dict) -> str | None:
+    """Name any field this route does not read, with the closest accepted one suggested.
+
+    A field whose name is not recognised is dropped and the declared default used instead, silently.
+    Measured on the live service: `/read` asked for `max_chars: 120` returned 279 characters, and the
+    same request with `max_charss` returned **8,079** — the caller capped their output, was ignored,
+    and received twenty-nine times as much. A caller sizing a context window acts on that number.
+
+    A note rather than a refusal: rejecting an unexpected field would break any client that sends one
+    today, which is too high a price for catching a typo.
+    """
+    import difflib
+
+    accepted = _ACCEPTED_FIELDS.get(path)
+    if not accepted or not isinstance(body, dict):
+        return None
+    unknown = sorted(k for k in body if k not in accepted)
+    if not unknown:
+        return None
+    hints = []
+    for key in unknown:
+        near = difflib.get_close_matches(key, sorted(accepted), n=1, cutoff=0.7)
+        hints.append(f"{key!r}" + (f" (did you mean {near[0]!r}?)" if near else ""))
+    return ("Ignored, because this endpoint does not read "
+            + ("them: " if len(unknown) > 1 else "it: ") + ", ".join(hints)
+            + ". The default was used instead, so this answer may not be the one you intended. "
+              "Accepted fields: " + ", ".join(sorted(accepted)) + ".")
+
+
 def _usage(endpoint: str, fee: float, what: str, example: dict, required: list) -> dict:
     """Reply to a paid request that supplied no input: the contract, with a request that would work.
 
@@ -125,6 +164,9 @@ async def research(req: Request):
     rounds = max(1, min(int(body.get("max_rounds", 12)), 16))
     # run the blocking research off the event loop so one deep run never freezes other requests
     res = await run_in_threadpool(deep_research, q, max_rounds=rounds)
+    note = _ignored_note("/research", body)
+    if note and isinstance(res, dict):
+        res = {**res, "ignored_input": note}
     return JSONResponse(res)
 
 
@@ -251,6 +293,7 @@ async def read(req: Request):
         "detail": None if retrieved else text,
         "chars": len(text) if retrieved else 0,
         "sources": sb.as_list(),
+        "ignored_input": _ignored_note("/read", body),
     }, status_code=200)
 
 
@@ -298,6 +341,7 @@ async def search(req: Request):
                     f"not be about this subject; treat as unverified" if degraded else None)),
         "detail": None if ok else text,
         "sources": found,
+        "ignored_input": _ignored_note("/search", body),
     }, status_code=200)
 
 
