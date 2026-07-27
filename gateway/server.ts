@@ -180,7 +180,74 @@ app.use("*", async (c, next) => {
   c.res.headers.set("access-control-expose-headers", CORS["access-control-expose-headers"]!);
 });
 
+/** Which field has to be present for a call to be able to produce anything at all. */
+const REQUIRED_INPUT: Record<string, string[]> = {
+  "/research": ["question"],
+  "/research/stream": ["question"],
+  "/read": ["url"],
+  "/search": ["query"],
+};
+
+function hasUsableInput(pathname: string, body: unknown): boolean {
+  const keys = REQUIRED_INPUT[pathname];
+  if (!keys) return true;                       // not a guarded route — never intervene
+  if (!body || typeof body !== "object") return false;
+  return keys.some((k) => {
+    const v = (body as Record<string, unknown>)[k];
+    return typeof v === "string" ? v.trim().length > 0 : v !== undefined && v !== null;
+  });
+}
+
 if (OKX_PAY_ENABLED) {
+  /** Never settle a payment for a request that cannot produce a result.
+   *
+   *  Settlement happens here, in the paywall, before the Python engine is ever reached — so a caller
+   *  that pays and sends no question has already been charged by the time anything downstream can
+   *  notice and say so. They get a fee on their statement and no artifact, which is the complaint
+   *  most likely to lose a customer permanently.
+   *
+   *  Rather than hand-roll a 402 (and risk a challenge that disagrees with the SDK's), the payment
+   *  headers are removed so the paywall sees an ordinary unpaid request and emits its own canonical
+   *  challenge — the one that states `Input: {question}`. Nothing is settled, the caller keeps their
+   *  money, and the reply tells them exactly what was missing.
+   *
+   *  Deliberately narrow: it acts only on a guarded route, only when payment is actually presented,
+   *  and any failure falls through untouched. The worst case is today's behaviour, never worse. */
+  app.use("*", async (c, next) => {
+    try {
+      const pathname = new URL(c.req.url).pathname;
+      if (!(pathname in REQUIRED_INPUT)) return next();
+      const presentsPayment = !!(c.req.header("PAYMENT-SIGNATURE") || c.req.header("X-PAYMENT"));
+      if (!presentsPayment) return next();      // unpaid probes must reach the SDK unchanged
+
+      // Read the body ONCE and rebuild the request from it, on both paths.
+      //
+      // `clone().text()` works for small bodies and silently breaks above roughly 32 KB: the clone
+      // and the original share a buffer, so consuming one leaves the other unreadable and the proxy
+      // downstream fails with an unexplained 502. Measured on the sibling gateway, where a 60 KB
+      // request died while an unguarded route took 120 KB without complaint.
+      const method = c.req.raw.method;
+      const raw = method === "GET" || method === "HEAD" ? "" : await c.req.text();
+      let parsed: unknown = null;
+      try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
+
+      const headers = new Headers(c.req.raw.headers);
+      const usable = hasUsableInput(pathname, parsed);
+      if (!usable) {
+        headers.delete("PAYMENT-SIGNATURE");
+        headers.delete("X-PAYMENT");
+        headers.set("x-reach-refused-no-input", "1");
+      }
+      c.req.raw = new Request(c.req.url, {
+        method,
+        headers,
+        body: method === "GET" || method === "HEAD" ? undefined : raw,
+      });
+      if (usable) return next();
+    } catch { /* fail open: on any edge case the request proceeds exactly as it does today */ }
+    return next();
+  });
+
   app.use("*", async (c, next) => {
     // Behind Caddy the request reaches us as http (TLS is terminated at the edge). Rewrite to https when
     // the edge saw https (X-Forwarded-Proto) BEFORE the payment middleware reads the URL, so the x402
