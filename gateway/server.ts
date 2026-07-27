@@ -98,6 +98,11 @@ function buildOkxPayMiddleware(): MiddlewareHandler {
   const httpServer = new x402HTTPResourceServer(rs, ROUTES_WITH_MIRROR as any);
   httpServer.onProtectedRequest(async (ctx) => {
     const h = (name: string) => ctx.adapter.getHeader(name) || "";
+
+    // NOTE: this hook can only ever *grant* access — returning anything other than
+    // `{grantAccess:true}` means "carry on with the normal payment flow". It is therefore the wrong
+    // place to refuse a replayed authorization; that check lives in the middleware above, which can
+    // actually stop the request.
     // Fail-closed: the ONLY unpaid bypass is the server-only x-reach-internal secret (Reach's own
     // site/demo/daemon), constant-time compared. Browser-forgeable headers (Sec-Fetch-Site / Origin /
     // Referer / Host) are NOT trusted — any HTTP client can forge them, which would hand an agent or the
@@ -180,6 +185,33 @@ app.use("*", async (c, next) => {
   c.res.headers.set("access-control-expose-headers", CORS["access-control-expose-headers"]!);
 });
 
+/** Authorizations already served, so the same one cannot buy the work twice.
+ *
+ *  Bounded and time-ordered: an EIP-3009 authorization is only valid for its `validBefore` window
+ *  (300s here), so anything older than an hour can never be replayed successfully and is dropped.
+ *  Without the bound this set would grow for the life of the process. */
+const SPENT_NONCES = new Map<string, number>();
+const NONCE_TTL_MS = 60 * 60 * 1000;
+
+function rememberNonce(nonce: string): void {
+  const now = Date.now();
+  SPENT_NONCES.set(nonce, now);
+  if (SPENT_NONCES.size > 5000) {
+    for (const [k, t] of SPENT_NONCES) if (now - t > NONCE_TTL_MS) SPENT_NONCES.delete(k);
+  }
+}
+
+/** The EIP-3009 nonce out of a base64 x402 payment payload, or "" if it cannot be read. */
+function authorizationNonce(header: string): string {
+  try {
+    const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
+    const n = decoded?.payload?.authorization?.nonce ?? decoded?.nonce;
+    return typeof n === "string" && n.length > 0 ? n : "";
+  } catch {
+    return "";
+  }
+}
+
 /** Which field has to be present for a call to be able to produce anything at all. */
 const REQUIRED_INPUT: Record<string, string[]> = {
   "/research": ["question"],
@@ -213,6 +245,45 @@ if (OKX_PAY_ENABLED) {
    *
    *  Deliberately narrow: it acts only on a guarded route, only when payment is actually presented,
    *  and any failure falls through untouched. The worst case is today's behaviour, never worse. */
+  /** An authorization already seen buys the work once, not twice.
+   *
+   *  Settlement runs with `syncSettle:false`, so there is a window between accepting a payment and
+   *  the chain recording its nonce as spent. A second request presenting the same authorization
+   *  inside that window verifies and is served. Measured against the live service before this
+   *  existed: **one $0.01 authorization bought four deliveries.**
+   *
+   *  The token contract is the real defence over the money — an EIP-3009 nonce can only ever settle
+   *  once — but that decides who keeps the fee, not who receives the work. Refusing here is what
+   *  stops the work being handed over repeatedly. Because the nonce is single-use by construction, a
+   *  retry carrying the same one could never have settled anyway, so treating it as spent on first
+   *  sight refuses nothing a caller could legitimately have completed.
+   *
+   *  The payment headers are stripped rather than a 402 hand-rolled, so the SDK issues its own
+   *  canonical challenge — the same mechanism the no-input guard uses. */
+  app.use("*", async (c, next) => {
+    try {
+      const header = c.req.header("PAYMENT-SIGNATURE") || c.req.header("X-PAYMENT");
+      if (!header) return next();
+      const nonce = authorizationNonce(header);
+      // Unparseable headers are left to the SDK to reject on its own terms; failing open here costs
+      // the SDK's verdict, never a free result.
+      if (!nonce) return next();
+      if (!SPENT_NONCES.has(nonce)) { rememberNonce(nonce); return next(); }
+
+      const headers = new Headers(c.req.raw.headers);
+      headers.delete("PAYMENT-SIGNATURE");
+      headers.delete("X-PAYMENT");
+      headers.set("x-reach-refused-replay", "1");
+      const method = c.req.raw.method;
+      const raw = method === "GET" || method === "HEAD" ? "" : await c.req.text();
+      c.req.raw = new Request(c.req.url, {
+        method, headers,
+        body: method === "GET" || method === "HEAD" ? undefined : raw,
+      });
+    } catch { /* fail open: the request proceeds exactly as it does today */ }
+    return next();
+  });
+
   app.use("*", async (c, next) => {
     try {
       const pathname = new URL(c.req.url).pathname;
