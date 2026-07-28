@@ -25,3 +25,6 @@ data/artifacts/
 # Local scratch — working notes, probe output, one-off dumps
 .scratch/
 *.tmp
+
+# internal QA notes — never public
+QA-LOG.md
