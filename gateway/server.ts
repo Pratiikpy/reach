@@ -212,10 +212,21 @@ function authorizationNonce(header: string): string {
   }
 }
 
-/** Which field has to be present for a call to be able to produce anything at all. */
+/** Which field has to be present for a call to be able to produce anything at all.
+ *
+ *  These names must match what the engine actually reads, not what the documentation happens to
+ *  name first. `/research` reads `body.get("question") or body.get("query")` and this list carried
+ *  only `question`, so a request built around `query` — a field the engine supports and would have
+ *  answered — was bounced here as if it had no input at all. Measured: `{"query": "..."}` returned
+ *  402 while `{"question": "..."}` returned 200 for the same words.
+ *
+ *  Being bounced is not the expensive part. The reply is the paywall's own challenge, so what the
+ *  caller reads is `Payment required` — and the obvious response to that is to retry the payment,
+ *  which will fail again in exactly the same way, forever. A guard meant to stop people paying for
+ *  nothing was instead telling them the wrong thing was wrong. */
 const REQUIRED_INPUT: Record<string, string[]> = {
-  "/research": ["question"],
-  "/research/stream": ["question"],
+  "/research": ["question", "query"],
+  "/research/stream": ["question", "query"],
   "/read": ["url"],
   "/search": ["query"],
 };
@@ -308,6 +319,28 @@ if (OKX_PAY_ENABLED) {
         headers.delete("PAYMENT-SIGNATURE");
         headers.delete("X-PAYMENT");
         headers.set("x-reach-refused-no-input", "1");
+        // Say which field was missing, and say it where the caller is actually looking.
+        //
+        // The comment above promises the reply "tells them exactly what was missing". It did not:
+        // the reply is the SDK's canonical challenge, whose visible text is `Payment required`. A
+        // caller reading that has no reason to suspect their field name.
+        //
+        // Written onto the REQUEST here and copied to the response further down. Setting it on the
+        // response directly (`c.header(...)`) looked equivalent and was not: it materialises `c.res`
+        // mid-middleware, and the fail-closed payment guard upstream then cannot clone the request
+        // body, so every empty-input call returned 500 instead of the 402 it was meant to get. That
+        // is a worse answer than the one being fixed, which is why it is measured rather than
+        // assumed — the log had exactly one occurrence in seven days, and it was mine.
+        //
+        // A header, not a field in the 402 body: that body is what OKX's validator parses, and five
+        // live listings depend on it staying the shape the validator expects. A diagnostic is not
+        // worth that risk, and the validator never reads headers of this name.
+        const sent = parsed && typeof parsed === "object" ? Object.keys(parsed as object) : [];
+        headers.set("x-reach-input-error",
+          `no usable input: this route needs one of ${REQUIRED_INPUT[pathname]!.join(" | ")}`
+          + `${sent.length ? `; received ${sent.join(", ")}` : "; the body was empty"}`
+          + ". Nothing was charged - the 402 is this guard refusing to bill for a request that "
+          + "cannot produce a result, not a rejected payment.");
       }
       c.req.raw = new Request(c.req.url, {
         method,
@@ -333,6 +366,13 @@ if (OKX_PAY_ENABLED) {
     // The 402 challenge + body-mirror + decimals are now produced natively by the SDK's documented
     // `unpaidResponseBody` hook (see buildOkxPayMiddleware) — header by the SDK, body by the hook — so
     // there is no hand-rolled 402 override here to fight Hono's `set res` header-merge.
+    //
+    // Carry the no-input diagnostic out to the caller. Safe here and only here: the response already
+    // exists, so nothing is materialised early, and this touches a header the validator never reads.
+    try {
+      const why = c.req.raw.headers.get("x-reach-input-error");
+      if (why) c.res.headers.set("x-reach-input-error", why);
+    } catch { /* a missing diagnostic must never cost the caller their response */ }
   });
   app.use("*", buildOkxPayMiddleware());
 }
